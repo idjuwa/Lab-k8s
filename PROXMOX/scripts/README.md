@@ -25,9 +25,9 @@ Interactif :
 #############################################################################
 # Création de lab à partir d'un dossier contenant les ova non interactif v1 #
 #############################################################################
-./create_lab_pipeline-ready.sh NUM_LAB NUM_VM_DEPART DOSSIER_OVA
+./create_lab_pipeline.sh NUM_LAB NUM_VM_DEPART DOSSIER_OVA
 Exemple:
-./create_lab_pipeline-ready.sh 3 1 /mnt/pve/pve1_usb/Lab-k8s/Loadbalancer
+./create_lab_pipeline.sh 3 1 /mnt/pve/pve1_usb/Lab-k8s/Loadbalancer
  3 → numéro du lab
  1 → premier numéro de VM à utiliser pour ce lab
  /mnt/pve/pve1_usb/Lab-k8s/Loadbalancer → dossier contenant les fichiers .ova à traiter

@@ -4,15 +4,17 @@ set -e
 #######################
 # CONFIG #
 #######################
-LAN_IF="eth1"
+LAN_IF="enx00051bb1d216"
 WAN_IF="eth0"
 VPN_IF="tun0"
 VPN_CLIENT_NAME="config_openvpn_routed_zabuza"
 OPENVPN_CONF_DIR="/etc/openvpn/client"
-VPN_USER="votre_login"
-VPN_PASS="votre_mot_de_passe"
+VPN_USER="zabuza"
+VPN_PASS="AzertyZabuza"
 WEBMIN_PORT=10000
 MOTIONEYE_PORT=8765
+SSHD_CONFIG="/etc/ssh/sshd_config"
+
 ### Réseau / IP
 VPN_CLIENT_IP="192.168.27.67"   # IP LOCALE du client VPN (tun0)
 LAN_BASE_IP="192.168.101."
@@ -22,9 +24,9 @@ CAM_COUNT=6
 
 FFMPEG_SRC_DIR="$HOME/ffmpeg_sources"
 
-#######################
-# FONCTIONS UTILES    #
-#######################
+###################################
+# DEFINITIONS DE FONCTIONS UTILES #
+###################################
 install_if_missing() {
     dpkg -s "$1" &>/dev/null || apt install -y "$1"
 }
@@ -37,9 +39,9 @@ enable_service() {
     systemctl enable "$1"
 }
 
-#######################
-# CONFIG SYSTEME      #
-#######################
+#################
+# SYNCHRO DATE  #
+#################
 echo "=== Configuration NTP et Timezone ==="
 install_if_missing systemd-timesyncd
 systemctl restart systemd-timesyncd
@@ -96,12 +98,18 @@ echo "=== Attente de l'interface VPN $VPN_IF ==="
 until ip link show "$VPN_IF" &>/dev/null; do sleep 1; done
 echo "$VPN_IF détecté"
 
-
-#######################
-# ROUTAGE IP
-#######################
+################
+# ROUTAGE IP   #
+################
 sysctl -w net.ipv4.ip_forward=1
 grep -qxF "net.ipv4.ip_forward=1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
+################
+# ROUTAGE IP   #
+################
+sysctl -w net.ipv4.ip_forward=1
+grep -qxF "net.ipv4.ip_forward=1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
 #######################
 # CONFIG IPTABLES     #
 #######################
@@ -188,40 +196,63 @@ netfilter-persistent save
 # INSTALL FFMPEG X265 #
 #######################
 echo "=== Installation des dépendances pour compilation ffmpeg ==="
+grep -Eq "^[^#]*\bnon-free\b" /etc/apt/sources.list || \
+echo "deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware" >> /etc/apt/sources.list
 apt update
 apt install -y autoconf automake build-essential cmake git-core libass-dev libfreetype6-dev \
 libgnutls28-dev libsdl2-dev libtool libva-dev libvdpau-dev libvorbis-dev libxcb1-dev \
 libxcb-shm0-dev libxcb-xfixes0-dev pkg-config texinfo wget yasm zlib1g-dev libx264-dev \
 libnuma-dev libvpx-dev libfdk-aac-dev libmp3lame-dev
 
+FFMPEG_SRC_DIR="${FFMPEG_SRC_DIR:-/usr/local/src/ffmpeg_build}"
 mkdir -p "$FFMPEG_SRC_DIR"
 cd "$FFMPEG_SRC_DIR"
 
-if [ ! -d "$FFMPEG_SRC_DIR/x265" ]; then
-    echo "=== Compilation libx265 ==="
-    hg clone https://bitbucket.org/multicoreware/x265
-    cd x265/build/linux
-    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_SHARED=ON ../../source
-    make -j$(nproc)
-    make install
-    cd "$FFMPEG_SRC_DIR"
-fi
+# Fonction pour compiler libx265
+compile_x265() {
+    if ! pkg-config --exists x265; then
+        echo "=== Compilation libx265 ==="
+        if [ ! -d "$FFMPEG_SRC_DIR/x265" ]; then
+            git clone https://bitbucket.org/multicoreware/x265_git x265
+        fi
+        cd x265/build/linux
+        cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_SHARED=ON ../../source
+        make -j$(nproc)
+        make install
+        cd "$FFMPEG_SRC_DIR"
+    else
+        echo "libx265 déjà installée, compilation ignorée."
+    fi
+}
 
-if [ ! -d "$FFMPEG_SRC_DIR/ffmpeg" ]; then
-    echo "=== Compilation ffmpeg avec libx265 ==="
-    git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg
-    cd ffmpeg
+# Fonction pour compiler FFmpeg
+compile_ffmpeg() {
+    if [ ! -d "$FFMPEG_SRC_DIR/ffmpeg" ]; then
+        echo "=== Compilation FFmpeg ==="
+        git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg
+    fi
+
+    cd "$FFMPEG_SRC_DIR/ffmpeg"
+
+    # Configure FFmpeg avec les libs communes
     ./configure --prefix=/usr/local --pkg-config-flags="--static" \
         --extra-cflags="-I/usr/local/include" \
         --extra-ldflags="-L/usr/local/lib" \
         --extra-libs="-lpthread -lm" \
         --bindir=/usr/local/bin \
-        --enable-gpl --enable-libx265 --enable-libx264 --enable-nonfree \
-        --enable-libfdk-aac --enable-libmp3lame --enable-libvorbis --enable-libvpx
+        --enable-gpl --enable-nonfree \
+        --enable-libx265 --enable-libx264 \
+        --enable-libfdk-aac --enable-libmp3lame \
+        --enable-libvorbis --enable-libvpx
+
     make -j$(nproc)
     make install
     hash -r
-fi
+}
+
+# Exécution
+compile_x265
+compile_ffmpeg
 
 ##################################
 # AUTOREMEDIATION SYSTEMD TIMERS #
@@ -261,5 +292,21 @@ create_timer "openvpn-client@$VPN_CLIENT_NAME"
 create_timer "webmin"
 create_timer "motioneye"
 
-echo "=== Script terminé. Services et ffmpeg avec libx265 configurés. Autoremediation via systemd timers toutes les 30 min ==="
+##################################
+# RESTORATION DE CONFIG SSH      #
+##################################
+cp "$SSHD_CONFIG" "${SSHD_CONFIG}.bak"
 
+sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' "$SSHD_CONFIG"
+
+if ! grep -q "^AllowUsers.*\bjaffar\b" "$SSHD_CONFIG"; then
+    echo "AllowUsers jaffar" >> "$SSHD_CONFIG"
+fi
+
+if systemctl is-active --quiet sshd; then
+    systemctl restart sshd
+else
+    service ssh restart
+fi
+
+echo "=== Services et ffmpeg avec libx265 configurés. Autoremediation via systemd timers toutes les 30 min ==="

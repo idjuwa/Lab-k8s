@@ -16,7 +16,7 @@ MOTIONEYE_PORT=8765
 SSHD_CONFIG="/etc/ssh/sshd_config"
 
 ### Réseau / IP
-VPN_CLIENT_IP="192.168.27.67"   # IP LOCALE du client VPN (tun0)
+VPN_CLIENT_IP="192.168.27.65"   # IP LOCALE du client VPN (tun0)
 LAN_BASE_IP="192.168.101."
 LAN_NET="$LAN_BASE_IP""0/24"
 CAM_START=101

@@ -104,12 +104,6 @@ echo "$VPN_IF détecté"
 sysctl -w net.ipv4.ip_forward=1
 grep -qxF "net.ipv4.ip_forward=1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
-################
-# ROUTAGE IP   #
-################
-sysctl -w net.ipv4.ip_forward=1
-grep -qxF "net.ipv4.ip_forward=1" /etc/sysctl.conf || echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-
 #######################
 # CONFIG IPTABLES     #
 #######################
@@ -141,25 +135,31 @@ WAN_PORT_ONVIF=8001
 
 for ((i=0; i<CAM_COUNT; i++)); do
     CAM_IP="${LAN_BASE_IP}$((CAM_START + i))"
-
-    iptables -t nat -A PREROUTING -i "$VPN_IF" -d "$VPN_CLIENT_IP" -p tcp --dport $((WAN_PORT_BASIC + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_BASIC}"
-    iptables -t nat -A PREROUTING -i "$VPN_IF" -d "$VPN_CLIENT_IP" -p tcp --dport $((WAN_PORT_RTMP + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_RTMP}"
-    iptables -t nat -A PREROUTING -i "$VPN_IF" -d "$VPN_CLIENT_IP" -p tcp --dport $((WAN_PORT_HTTP + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_HTTP}"
-    iptables -t nat -A PREROUTING -i "$VPN_IF" -d "$VPN_CLIENT_IP" -p tcp --dport $(((i+1)*1000 + 443)) -j DNAT --to "${CAM_IP}:${LAN_PORT_HTTPS}"
-    iptables -t nat -A PREROUTING -i "$VPN_IF" -d "$VPN_CLIENT_IP" -p tcp --dport $((WAN_PORT_RTSP + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_RTSP}"
-    iptables -t nat -A PREROUTING -i "$VPN_IF" -d "$VPN_CLIENT_IP" -p tcp --dport $((WAN_PORT_ONVIF + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_ONVIF}"
+    iptables -t nat -A PREROUTING -i tun0 -m addrtype --dst-type LOCAL -p tcp --dport $((WAN_PORT_BASIC + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_BASIC}"
+    iptables -t nat -A PREROUTING -i tun0 -m addrtype --dst-type LOCAL -p tcp --dport $((WAN_PORT_RTMP + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_RTMP}"
+    iptables -t nat -A PREROUTING -i tun0 -m addrtype --dst-type LOCAL -p tcp --dport $((WAN_PORT_HTTP + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_HTTP}"
+    iptables -t nat -A PREROUTING -i tun0 -m addrtype --dst-type LOCAL -p tcp --dport $(((i+1)*1000 + 443)) -j DNAT --to "${CAM_IP}:${LAN_PORT_HTTPS}"
+    iptables -t nat -A PREROUTING -i tun0 -m addrtype --dst-type LOCAL -p tcp --dport $((WAN_PORT_RTSP + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_RTSP}"
+    iptables -t nat -A PREROUTING -i tun0 -m addrtype --dst-type LOCAL -p tcp --dport $((WAN_PORT_ONVIF + i)) -j DNAT --to "${CAM_IP}:${LAN_PORT_ONVIF}"
 done
+
 #######################
 # FORWARD (VIDÉO SAFE)
 #######################
-# iptables -A FORWARD -i "$VPN_IF" -o "$LAN_IF" -m state --state RELATED,ESTABLISHED -j ACCEPT
+# Autoriser les flux déjà établis / retours
 iptables -A FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# VPN -> LAN (accès aux caméras via DNAT)
 iptables -A FORWARD -i "$VPN_IF" -o "$LAN_IF" -j ACCEPT
-iptables -A FORWARD -i "$LAN_IF" -o "$VPN_IF" -j ACCEPT
+# LAN -> VPN (retours uniquement, pas d'initiation depuis le LAN)
+iptables -A FORWARD -i "$LAN_IF" -o "$VPN_IF" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# Optionnel : bloquer toute sortie LAN directe vers le WAN
 iptables -A FORWARD -i "$LAN_IF" -o "$WAN_IF" -j DROP
 
-# NAT UNIQUEMENT VPN
-iptables -t nat -A POSTROUTING -o "$VPN_IF" -j MASQUERADE
+#######################
+# NAT (SNAT VPN -> LAN)
+#######################
+# Masquerade du réseau VPN vers le LAN (OBLIGATOIRE pour le DNAT)
+iptables -t nat -A POSTROUTING -s 192.168.27.0/24 -o "$LAN_IF" -j MASQUERADE
 
 #######################
 # PROFIL CONNTRACK OPTIMISÉ POUR RTSP/RTMP/ONVIF

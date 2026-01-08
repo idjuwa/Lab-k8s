@@ -91,6 +91,10 @@ mkdir -p "$OPENVPN_CONF_DIR"
 AUTH_FILE="$OPENVPN_CONF_DIR/$VPN_CLIENT_NAME.auth"
 echo -e "$VPN_USER\n$VPN_PASS" > "$AUTH_FILE"
 chmod 600 "$AUTH_FILE"
+sed -i \
+  -e "s|^[[:space:]]*auth-user-pass\(.*\)$|auth-user-pass $AUTH_FILE|" \
+  -e "s/\<interact\>/nointeract/" \
+  "$OPENVPN_CONF_DIR/$VPN_CLIENT_NAME.conf"
 
 systemctl enable --now openvpn-client@"$VPN_CLIENT_NAME"
 

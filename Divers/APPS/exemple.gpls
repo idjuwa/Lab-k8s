@@ -1,0 +1,6 @@
+#GRIDPLAYER
+#P:{"grid_state":{"mode":"auto_rows","is_fit":true,"size":0},"snapshots":{},"seek_sync_mode":"disabled","shuffle_on_load":false,"disable_click_pause":false,"disable_wheel_seek":false}
+#V0:{"id":"47b31b30-9922-461c-ab00-9c228a873674","color":"white","repeat_mode":"single_file","is_start_random":false,"rate":1.0,"aspect_mode":"stretch","is_muted":true,"scale":1.0,"crop":[0,0,0,0],"volume":1.0,"transform":"none","stream_quality":"best","auto_reload_timer_min":0,"audio_track_id":1,"video_track_id":0,"audio_channel_mode":"unset"}
+#V1:{"id":"22923a5f-a985-455f-88d0-1b9a6ac52aef","color":"white","repeat_mode":"single_file","is_start_random":false,"rate":1.0,"aspect_mode":"stretch","is_muted":true,"scale":1.0,"crop":[0,0,0,0],"volume":1.0,"transform":"none","stream_quality":"best","auto_reload_timer_min":0,"audio_track_id":1,"video_track_id":0,"audio_channel_mode":"unset"}
+rtsp://login:password@192.168.x1.y1:z1/h264Preview_01_sub
+rtsp://login:password@192.168.x2.y2:z2/h264Preview_01_sub
